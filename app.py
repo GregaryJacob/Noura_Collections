@@ -5,11 +5,14 @@ from models import db, Product
 from forms import ProductForm
 from config import Config
 from dotenv import load_dotenv
+from sqlalchemy.exc import IntegrityError
 
 load_dotenv()
 
 app = Flask(__name__)
-print(type(app))
+#test debug start
+#print(type(app))
+#test debug end
 app.config.from_object(Config)
 db.init_app(app)
 
@@ -73,21 +76,28 @@ def add_or_edit(product_id=None):
             image_filename = secure_filename(image.filename)
             image.save(os.path.join(app.config['UPLOAD_FOLDER'], image_filename))
 
-        if product:
-            product.serial_number = form.serial_number.data
-            product.name = form.name.data
-            product.description = form.description.data
-            product.image_filename = image_filename
-        else:
-            product = Product(
-                serial_number=form.serial_number.data,
-                name=form.name.data,
-                description=form.description.data,
-                image_filename=image_filename
-            )
-            db.session.add(product)
-        db.session.commit()
-        return redirect(url_for('admin'))
+        # Try block to catch the exception of same serial number
+        try:
+            if product:
+                product.serial_number = form.serial_number.data
+                product.name = form.name.data
+                product.description = form.description.data
+                product.image_filename = image_filename
+            else:
+                product = Product(
+                    serial_number=form.serial_number.data,
+                    name=form.name.data,
+                    description=form.description.data,
+                    image_filename=image_filename
+                )
+                db.session.add(product)
+
+            db.session.commit()
+            return redirect(url_for('admin'))
+
+        except IntegrityError:
+            db.session.rollback()
+            flash('A product with that serial number already exists. Please use a unique serial number.', 'danger')
 
     if product:
         form.serial_number.data = product.serial_number
