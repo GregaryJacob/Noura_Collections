@@ -10,9 +10,6 @@ from sqlalchemy.exc import IntegrityError
 load_dotenv()
 
 app = Flask(__name__)
-#test debug start
-#print(type(app))
-#test debug end
 app.config.from_object(Config)
 db.init_app(app)
 
@@ -25,9 +22,7 @@ ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "password")
 
 with app.app_context():
-    #test start
     print("Using DB URI:", app.config['SQLALCHEMY_DATABASE_URI'])
-#test end
     db.create_all()
 
 @app.route('/')
@@ -47,7 +42,7 @@ def login():
             session['admin'] = True
             return redirect(url_for('admin'))
         else:
-            flash('Invalid credentials')
+            flash('Invalid credentials', 'danger')
     return render_template('login.html')
 
 @app.route('/logout')
@@ -67,16 +62,23 @@ def admin():
 def add_or_edit(product_id=None):
     if not session.get('admin'):
         return redirect(url_for('login'))
-    form = ProductForm()
+
     product = Product.query.get(product_id) if product_id else None
+    form = ProductForm(original_serial_number=product.serial_number if product else None)
+
+    if request.method == 'GET' and product:
+        form.serial_number.data = product.serial_number
+        form.name.data = product.name
+        form.description.data = product.description
+
     if form.validate_on_submit():
         image_filename = product.image_filename if product else None
+
         if form.image.data:
             image = form.image.data
             image_filename = secure_filename(image.filename)
             image.save(os.path.join(app.config['UPLOAD_FOLDER'], image_filename))
 
-        # Try block to catch the exception of same serial number
         try:
             if product:
                 product.serial_number = form.serial_number.data
@@ -99,10 +101,6 @@ def add_or_edit(product_id=None):
             db.session.rollback()
             flash('A product with that serial number already exists. Please use a unique serial number.', 'danger')
 
-    if product:
-        form.serial_number.data = product.serial_number
-        form.name.data = product.name
-        form.description.data = product.description
     return render_template('form.html', form=form, product=product)
 
 @app.route('/delete/<int:product_id>')
